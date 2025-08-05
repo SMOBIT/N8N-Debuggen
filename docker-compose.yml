@@ -53,4 +53,31 @@ services:
       # Node.js Modulpfad
       NODE_PATH: /usr/lib/node_modules:/usr/local/lib/node_modules
       
-      # VM2 und weitere Einste
+      # VM2 und weitere Einstellungen
+      N8N_SKIP_WEBHOOK_DEREGISTRATION_SHUTDOWN: 'true'
+      GENERIC_TIMEZONE: Europe/Berlin
+      
+    ports:
+      - "5678:5678"
+    volumes:
+      # n8n Daten
+      - n8n-data:/home/n8n/.n8n
+      
+      # Deine Ordner für die Datenverarbeitung
+      - /srv/sds-converter/sample_pdfs:/data/sample_pdfs
+      - /srv/sds-converter/templates:/data/templates
+      - /srv/sds-converter/icons:/data/icons
+      - /srv/sds-converter/output:/data/output
+      
+    networks:
+      - n8n-network
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+networks:
+  n8n-network:
+    driver: bridge
