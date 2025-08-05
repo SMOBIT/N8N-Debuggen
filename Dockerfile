@@ -1,15 +1,15 @@
-# STAGE 1: Eine saubere, AKTUELLE Debian-Basis (Debian 12 "Bookworm")
+# STAGE 1: Debian Basis
 FROM debian:bookworm-slim
 
-# Setze Umgebungsvariablen für eine non-interactive Installation
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Europe/Berlin
 
-# STAGE 2: Installation der Grundvoraussetzungen
+# STAGE 2: System-Abhängigkeiten installieren
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl gnupg \
     python3 python3-pip python3-dev \
     libxml2-dev libxslt1-dev zlib1g-dev \
+    build-essential \
     pandoc \
     tesseract-ocr tesseract-ocr-deu \
     ghostscript qpdf unpaper \
@@ -17,86 +17,57 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nano wget ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
-# Installiere Node.js 20 LTS
+# Node.js 20 installieren
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
  && apt-get install -y --no-install-recommends nodejs
 
-# STAGE 3: User anlegen VOR n8n Installation
+# STAGE 3: User anlegen
 RUN useradd --user-group --create-home --shell /bin/false n8n
 RUN mkdir -p /home/n8n/.n8n && chown -R n8n:n8n /home/n8n
 
-# STAGE 4: n8n Installation und Konfiguration
-# Installiere n8n global
+# STAGE 4: n8n und Module installieren
+# n8n global installieren
 RUN npm install -g n8n@latest
 
-# KRITISCHER FIX: Module in das n8n node_modules Verzeichnis installieren
-# UND die VM2-Whitelist erweitern
-RUN cd /usr/lib/node_modules/n8n && npm install --production=false \
+# Externe Module DIREKT in n8n's node_modules installieren
+RUN cd /usr/lib/node_modules/n8n && npm install \
+    pdf-parse \
     cheerio \
-    node-convert \
     mammoth \
+    turndown \
     html-minifier \
     @adobe/helix-docx2md \
-    turndown \
-    pdf-parse
+    node-convert
 
-# Zusätzlich: Module auch global verfügbar machen
-RUN npm install -g --production=false \
+# Module auch global installieren (Fallback)
+RUN npm install -g \
+    pdf-parse \
     cheerio \
-    node-convert \
     mammoth \
+    turndown \
     html-minifier \
     @adobe/helix-docx2md \
-    turndown \
-    pdf-parse
+    node-convert
 
-# WICHTIG: n8n VM2 Konfiguration anpassen
-# Wir erstellen eine Konfigurationsdatei, die die Module für VM2 freigibt
-RUN mkdir -p /home/n8n/.n8n && cat > /home/n8n/.n8n/config.json << 'EOF'
-{
-  "nodes": {
-    "communityPackages": {
-      "enabled": true
-    }
-  },
-  "executions": {
-    "process": "main"
-  },
-  "generic": {
-    "timezone": "Europe/Berlin"
-  }
-}
-EOF
+# n8n Konfiguration erstellen
+RUN mkdir -p /home/n8n/.n8n && echo '{ \
+  "nodes": { \
+    "communityPackages": { \
+      "enabled": true \
+    } \
+  }, \
+  "executions": { \
+    "process": "main" \
+  } \
+}' > /home/n8n/.n8n/config.json
 
-# VM2 Sandbox Whitelist erweitern - NEUE METHODE
-RUN cd /usr/lib/node_modules/n8n && \
-    if [ -f "package.json" ]; then \
-        node -e "
-        const fs = require('fs');
-        const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-        if (!pkg.n8n) pkg.n8n = {};
-        if (!pkg.n8n.nodeTypes) pkg.n8n.nodeTypes = {};
-        if (!pkg.n8n.nodeTypes.external) pkg.n8n.nodeTypes.external = [];
-        const modules = ['cheerio', 'node-convert', 'mammoth', 'html-minifier', '@adobe/helix-docx2md', 'turndown', 'pdf-parse'];
-        modules.forEach(mod => {
-            if (!pkg.n8n.nodeTypes.external.includes(mod)) {
-                pkg.n8n.nodeTypes.external.push(mod);
-            }
-        });
-        fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
-        "; \
-    fi
-
-# Alternative: Symlinks zu den Modulen erstellen
-RUN ln -sf /usr/lib/node_modules/pdf-parse /usr/lib/node_modules/n8n/node_modules/pdf-parse || true
-RUN ln -sf /usr/lib/node_modules/cheerio /usr/lib/node_modules/n8n/node_modules/cheerio || true
-RUN ln -sf /usr/lib/node_modules/mammoth /usr/lib/node_modules/n8n/node_modules/mammoth || true
-RUN ln -sf /usr/lib/node_modules/turndown /usr/lib/node_modules/n8n/node_modules/turndown || true
-RUN ln -sf /usr/lib/node_modules/html-minifier /usr/lib/node_modules/n8n/node_modules/html-minifier || true
+# VM2 Sandbox Fix anwenden
+COPY vm2-fix.js /tmp/vm2-fix.js
+RUN node /tmp/vm2-fix.js && rm /tmp/vm2-fix.js
 
 # Berechtigungen setzen
 RUN chown -R n8n:n8n /home/n8n/.n8n
-RUN chown -R n8n:n8n /usr/lib/node_modules/n8n/node_modules 2>/dev/null || true
+RUN chown -R n8n:n8n /usr/lib/node_modules/n8n 2>/dev/null || true
 
 # Cache aufräumen
 RUN npm cache clean --force
@@ -105,8 +76,5 @@ RUN npm cache clean --force
 USER n8n
 WORKDIR /home/n8n
 
-# Port freigeben
 EXPOSE 5678
-
-# Startkommando
 CMD ["n8n"]
