@@ -46,12 +46,26 @@ services:
       
       # Execution settings
       EXECUTIONS_PROCESS: main
+      EXECUTIONS_TIMEOUT: -1
+      EXECUTIONS_TIMEOUT_MAX: 3600
       
       # n8n Datenverzeichnis
       N8N_USER_FOLDER: /home/n8n/.n8n
       
-      # Node.js Modulpfad
-      NODE_PATH: /usr/lib/node_modules:/usr/local/lib/node_modules
+      # WICHTIG: Diese Umgebungsvariablen aktivieren externe Module in Code Nodes
+      NODE_FUNCTION_ALLOW_BUILTIN: '*'
+      NODE_FUNCTION_ALLOW_EXTERNAL: 'pdf-parse,cheerio,mammoth,turndown,html-minifier,@adobe/helix-docx2md,node-convert'
+      
+      # Alternative Namen für die gleichen Einstellungen (je nach n8n Version)
+      NODES_EXCLUDE_AUTH: ''
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: 'false'
+      
+      # Pfade wo Module gesucht werden
+      NODE_PATH: /usr/lib/node_modules:/home/n8n/.n8n/custom/node_modules
+      
+      # Optional: Falls n8n >= 1.0
+      N8N_RESTRICT_EXEC_FUNCTIONS_ALLOW_BUILTIN: '*'
+      N8N_RESTRICT_EXEC_FUNCTIONS_ALLOW_EXTERNAL: 'pdf-parse,cheerio,mammoth,turndown,html-minifier,@adobe/helix-docx2md,node-convert'
       
       # VM2 und weitere Einstellungen
       N8N_SKIP_WEBHOOK_DEREGISTRATION_SHUTDOWN: 'true'
